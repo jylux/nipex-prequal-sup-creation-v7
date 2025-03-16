@@ -1,0 +1,53 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Diagnostic reports (crash, debugging, profiling, etc.)
+report.[0-9]*.[0-9]*.json
+
+# Node modules
+node_modules/
+
+# Dependencies and build output
+dist/
+build/
+.next/
+out/
+.tsbuildinfo
+
+# Next.js specific
+.next/
+out/
+next-env.d.ts
+
+# TypeScript cache/output
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Editor directories and OS-specific files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Optional lockfiles (Uncomment if you do NOT want to commit lockfiles)
+# package-lock.json
+# yarn.lock
+
+# Optional: You can ignore the following if you have separate front-end and back-end
+# directories and want to tailor the ignores specifically
+# /frontend/node_modules/
+# /backend/node_modules/
+# /backend/dist/
+# /frontend/.next/
