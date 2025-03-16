@@ -43,11 +43,11 @@ export const searchCompanies = async (req: Request, res: Response) => {
   try {
     // Modified SQL to exclude numeric vendor IDs directly in the query
     const sql = `
-      SELECT fldi_company_id, fldv_companyname, fldi_vendor_id, fldv_address, 
+      SELECT fldv_companyname, fldi_vendor_id, fldv_address, 
              fldv_phone, fldv_email_id, fldv_website
       FROM tbl_company_mst
       WHERE fldv_companyname LIKE ?
-      AND fldi_vendor_id NOT REGEXP '[^0-9]'
+      AND fldi_vendor_id NOT REGEXP '^[0-9]+$'
       LIMIT 20
     `;
     
@@ -55,12 +55,12 @@ export const searchCompanies = async (req: Request, res: Response) => {
 
     // Map DB columns to frontend expected format
     const companies = rows.map(row => ({
-      suppuserid: row.fldi_company_id,
+      suppuserid: row.fldi_vendor_id,
       SUP_NAME: row.fldv_companyname,
-      SUP_Address1: row.fldv_address || '',
-      SUP_Phone: row.fldv_phonen || '',
-      SUP_Email: row.fldv_email || '',
-      SUP_Website: row.fldv_website || '',
+      SUP_Address1: row.fldv_address,
+      SUP_Phone: row.fldv_phone,
+      SUP_Email: row.fldv_email_id,
+      SUP_Website: row.fldv_website,
       SUP_Town: '', // Will be populated by frontend with OpenStreetMap API
       date_prequal: new Date,
       BIDDER_NUMBER: '', // Will be populated by frontend
@@ -74,21 +74,57 @@ export const searchCompanies = async (req: Request, res: Response) => {
   }
 };
 
+
 /**
  * POST /companies/export/excel
- * Exports selected companies to Excel format
+ * Exports selected companies to Excel format with specific formatting
  */
 export const exportExcel = async (req: Request, res: Response) => {
   try {
-    const companies = req.body;
+    const { companies, bidderStartNumber } = req.body;
+    const numericStart = parseInt(bidderStartNumber, 10) || 0;
+    const BID_LEN = 10;
     
     if (!Array.isArray(companies)) {
       return res.status(400).json({ message: 'Companies must be an array' });
     }
     
+    // Process data into the specific format required
+    const processedData = companies.map((company, index) => {
+      let finalBidNum = company.BIDDER_NUMBER;
+      if (!finalBidNum) {
+        finalBidNum = (numericStart + index * 2)
+          .toString()
+          .padStart(BID_LEN, '0');
+      } else {
+        finalBidNum = finalBidNum.padStart(BID_LEN, '0').slice(0, BID_LEN);
+      }
+      
+      return [
+        'bbp001',
+        company.SUP_NAME,
+        company.SUP_NAME,
+        'EN',
+        'NG',
+        company.SUP_Phone,
+        'NG',
+        company.SUP_Email,
+        company.SUP_Town || 'LAGOS',
+        '0002',
+        company.SUP_NAME,
+        company.SUP_NAME,
+        'EN',
+        'X',
+        company.suppuserid,
+        '50004066',
+      ];
+    });
+    
+  
+    
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(companies);
+    const ws = XLSX.utils.aoa_to_sheet([...processedData]);
     
     // Apply formatting (headers bold)
     const range = XLSX.utils.decode_range(ws['!ref'] || '');
@@ -118,23 +154,53 @@ export const exportExcel = async (req: Request, res: Response) => {
 
 /**
  * POST /companies/export/text
- * Exports selected companies to tab-delimited text format
+ * Exports selected companies to tab-delimited text format with specific formatting
  */
 export const exportText = async (req: Request, res: Response) => {
   try {
-    const companies = req.body;
+    const { companies, bidderStartNumber } = req.body;
+    const numericStart = parseInt(bidderStartNumber, 10) || 0;
+    const BID_LEN = 10;
     
     if (!Array.isArray(companies)) {
       return res.status(400).json({ message: 'Companies must be an array' });
     }
     
-    // Format each company according to the specified format
-    const lines = companies.map(company => {
-      return `bbp001 ${company.SUP_NAME} ${company.SUP_NAME} EN NG ${company.SUP_Phone} NG ${company.SUP_Email} ${company.SUP_Town} 0002 ${company.SUP_NAME} ${company.SUP_NAME} EN X ${company.suppuserid} 50004066`;
+    // Process data into the specific format required and create tab-delimited lines
+    const lines = companies.map((company, index) => {
+      let finalBidNum = company.BIDDER_NUMBER;
+      if (!finalBidNum) {
+        finalBidNum = (numericStart + index * 2)
+          .toString()
+          .padStart(BID_LEN, '0');
+      } else {
+        finalBidNum = finalBidNum.padStart(BID_LEN, '0').slice(0, BID_LEN);
+      }
+      
+      const fields = [
+        'bbp001',
+        company.SUP_NAME,
+        company.SUP_NAME,
+        'EN',
+        'NG',
+        company.SUP_Phone,
+        'NG',
+        company.SUP_Email,
+        company.SUP_Town || 'LAGOS',
+        '0002',
+        company.SUP_NAME,
+        company.SUP_NAME,
+        'EN',
+        'X',
+        company.suppuserid,
+        '50004066',
+      ];
+      
+      return fields.join('\t');
     });
     
-    // Join lines with newlines
-    const content = lines.join('\n');
+    
+    const content = [...lines].join('\n');
     
     // Set headers for file download
     res.setHeader('Content-Disposition', 'attachment; filename="suppliers.txt"');

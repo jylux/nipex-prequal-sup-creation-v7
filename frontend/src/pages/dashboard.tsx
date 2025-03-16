@@ -2,13 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { companyApi } from '@/utils/api';
-// import { 
-//   searchCompanies, 
-//   exportCompaniesToExcel, 
-//   exportCompaniesToText, 
-//   insertCompanies
-// } from '@/utils/api';
+import { companyApi, searchAddress } from '@/utils/api';
 import CompanySearch from '@/components/CompanySearch';
 import SelectedCompaniesTable from '@/components/SelectedCompaniesTable';
 import BidderNumberInput from '@/components/BidderNumberInput';
@@ -62,6 +56,7 @@ export default function DashboardPage() {
     setIsSearching(true);
     try {
       const results = await companyApi.searchCompanies(query);
+      console.log('Search results:', results);
       setSearchResults(results);
       
       if (results.length === 0) {
@@ -83,8 +78,8 @@ export default function DashboardPage() {
     }
   }
 
-  // Add a company to the selected list
-  function addCompany(company: Company) {
+  // Add a company to the selected list with address lookup
+  async function addCompany(company: Company) {
     // Check if already added
     if (selectedCompanies.some(comp => comp.suppuserid === company.suppuserid)) {
       toast({
@@ -95,17 +90,57 @@ export default function DashboardPage() {
       return;
     }
     
+    // Create a copy of the company to modify
+    const companyToAdd = { ...company };
+    
+    // Try to get town from address if not already set
+    if (!companyToAdd.SUP_Town && companyToAdd.SUP_Address1) {
+      setIsProcessing(true);
+      try {
+        toast({
+          title: "Fetching town information",
+          description: "Looking up location from address...",
+        });
+        
+        const addressData = await searchAddress(companyToAdd.SUP_Address1);
+        if (addressData && addressData.town) {
+          companyToAdd.SUP_Town = addressData.town;
+          
+          toast({
+            title: "Town found",
+            description: `Found town: ${addressData.town}`,
+          });
+        } else {
+          companyToAdd.SUP_Town = "Unknown";
+          
+          toast({
+            title: "Town not found",
+            description: "Could not determine town from address",
+            variant: "warning",
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching town:', error);
+        companyToAdd.SUP_Town = "Unknown";
+        
+        toast({
+          title: "Address lookup failed",
+          description: "Could not fetch town information",
+          variant: "destructive",
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+    
     // Auto-generate bidder number for the new company
     const nextBidderNumber = (selectedCompanies.length > 0)
       ? (parseInt(selectedCompanies[selectedCompanies.length - 1].BIDDER_NUMBER || bidderStart) + 2).toString().padStart(10, '0')
       : bidderStart;
     
-    const companyWithBidder = {
-      ...company,
-      BIDDER_NUMBER: nextBidderNumber
-    };
+    companyToAdd.BIDDER_NUMBER = nextBidderNumber;
     
-    setSelectedCompanies([...selectedCompanies, companyWithBidder]);
+    setSelectedCompanies([...selectedCompanies, companyToAdd]);
     
     toast({
       title: "Company added",
@@ -119,7 +154,65 @@ export default function DashboardPage() {
   }
 
   // Update a company in the selected list
-  function updateCompany(updatedCompany: Company) {
+  async function updateCompany(updatedCompany: Company) {
+    // Special handling for town updates - if user enters "refresh" in town field
+    if (updatedCompany.SUP_Town === "refresh" && updatedCompany.SUP_Address1) {
+      try {
+        setIsProcessing(true);
+        toast({
+          title: "Refreshing town information",
+          description: "Looking up location from address...",
+        });
+        
+        const addressData = await searchAddress(updatedCompany.SUP_Address1);
+        if (addressData && addressData.town) {
+          updatedCompany.SUP_Town = addressData.town;
+          
+          toast({
+            title: "Town updated",
+            description: `Updated town to: ${addressData.town}`,
+          });
+        } else {
+          updatedCompany.SUP_Town = "Unknown";
+          
+          toast({
+            title: "Town not found",
+            description: "Could not determine town from address",
+            variant: "warning",
+          });
+        }
+      } catch (error) {
+        console.error('Error refreshing town:', error);
+        updatedCompany.SUP_Town = "Unknown";
+        
+        toast({
+          title: "Address lookup failed",
+          description: "Could not fetch town information",
+          variant: "destructive",
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+    
+    // Also attempt lookup if town is blank but address exists
+    if (!updatedCompany.SUP_Town && updatedCompany.SUP_Address1) {
+      try {
+        setIsProcessing(true);
+        const addressData = await searchAddress(updatedCompany.SUP_Address1);
+        if (addressData && addressData.town) {
+          updatedCompany.SUP_Town = addressData.town;
+        } else {
+          updatedCompany.SUP_Town = "Unknown";
+        }
+      } catch (error) {
+        console.error('Error fetching town:', error);
+        updatedCompany.SUP_Town = "Unknown";
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+    
     setSelectedCompanies(
       selectedCompanies.map(comp => 
         comp.suppuserid === updatedCompany.suppuserid ? updatedCompany : comp
@@ -128,7 +221,7 @@ export default function DashboardPage() {
   }
 
   // Export selected companies to Excel
-  async function handleExportExcel() {
+  const handleExportExcel = async () => {
     if (selectedCompanies.length === 0) {
       toast({
         title: "No companies selected",
@@ -140,22 +233,24 @@ export default function DashboardPage() {
     
     setIsProcessing(true);
     try {
-      await companyApi.exportToExcel(selectedCompanies);
+      // Make sure you're sending both companies and bidderStartNumber
+      await companyApi.exportToExcel(selectedCompanies, bidderStart);
+      
       toast({
         title: "Export successful",
-        description: `Exported ${selectedCompanies.length} companies to Excel`,
+        description: "Data exported to Excel successfully",
       });
     } catch (error) {
-      console.error('Export error:', error);
+      console.error("Export error:", error);
       toast({
         title: "Export failed",
-        description: "An error occurred while exporting to Excel",
+        description: "Failed to export data to Excel",
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
     }
-  }
+  };
 
   // Export selected companies to text
   async function handleExportText() {
@@ -170,7 +265,8 @@ export default function DashboardPage() {
     
     setIsProcessing(true);
     try {
-      await companyApi.exportToText(selectedCompanies);
+      await companyApi.exportToText(selectedCompanies, bidderStart);
+      
       toast({
         title: "Export successful",
         description: `Exported ${selectedCompanies.length} companies to text format`,
@@ -210,6 +306,14 @@ export default function DashboardPage() {
         variant: "destructive",
       });
       return;
+    }
+    
+    // Check if any town fields are empty and show a warning
+    const companiesWithoutTown = selectedCompanies.filter(comp => !comp.SUP_Town);
+    if (companiesWithoutTown.length > 0) {
+      if (!window.confirm(`${companiesWithoutTown.length} companies do not have town information. Do you want to continue?`)) {
+        return;
+      }
     }
     
     setIsProcessing(true);
@@ -343,6 +447,7 @@ export default function DashboardPage() {
                                     variant="outline"
                                     onClick={() => addCompany(company)}
                                     className="shrink-0"
+                                    disabled={isProcessing}
                                   >
                                     <PlusCircle className="h-4 w-4 mr-1" />
                                     Add

@@ -80,28 +80,35 @@ export const companyApi = {
     return response.data;
   },
   
-  exportToExcel: async (companies: any[]) => {
-    const response = await api.post('/companies/export/excel', companies, {
-      responseType: 'blob'
-    });
-    
-    // Create and trigger download
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'suppliers.xlsx');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    return true;
-  },
+  // In your api.ts file
+exportToExcel: async (companies: any[], bidderStartNumber: string ) => {
+  const response = await api.post('/companies/export/excel', {
+    companies,
+    bidderStartNumber
+  }, {
+    responseType: 'blob'
+  });
   
-  exportToText: async (companies: any[]) => {
-    const response = await api.post('/companies/export/text', companies, {
-      responseType: 'blob'
-    });
+  // Create download link
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'suppliers.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+  
+  return true;
+},
+  
+exportToText: async (companies: any[], bidderStartNumber?: string) => {
+  const response = await api.post('/companies/export/text', {
+    companies,
+    bidderStartNumber
+  }, {
+    responseType: 'blob'
+  });
     
     // Create and trigger download
     const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -123,41 +130,79 @@ export const companyApi = {
 };
 
 // OpenStreetMap address parsing
+// Cache to avoid repeated calls for the same address
+const addressCache = new Map<string, { town: string, display_name: string }>();
+
 export const searchAddress = async (address: string) => {
-  if (!address) return null;
+  if (!address) return { town: 'LAGOS', display_name: '' };
+  
+  // Check cache first
+  const cachedResult = addressCache.get(address);
+  if (cachedResult) {
+    console.log('Using cached result for address:', address);
+    return cachedResult;
+  }
   
   try {
-    // Use Nominatim API directly from the frontend
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
-      {
+    // Split the address and reverse it to prioritize city names
+    const addressParts = address.split(',').map(part => part.trim()).reverse();
+    
+    for (const part of addressParts) {
+      // Skip very short parts
+      if (part.length < 3) continue;
+      
+      const cleanPart = encodeURIComponent(`${part}, Nigeria`);
+      const apiUrl = `https://nominatim.openstreetmap.org/search?q=${cleanPart}&format=json&countrycodes=ng&addressdetails=1&limit=1`;
+      
+      console.log('Trying address part:', part);
+      
+      // Add small delay between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
         headers: {
-          'User-Agent': 'NipexJQS/1.0'
+          'User-Agent': 'NipexJQS/1.0',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) continue;
+      
+      const data = await response.json();
+      console.log('API response for part:', part, data);
+      
+      if (data && data.length > 0 && data[0].address) {
+        const result = data[0].address;
+        
+        // Check for all possible town/city indicators
+        const town = result.city || 
+                     result.town || 
+                     result.municipality ||
+                     result.state_district ||
+                     result.suburb;
+        
+        if (town) {
+          console.log('Found town:', town);
+          const townResult = { 
+            town: town.toUpperCase(), 
+            display_name: data[0].display_name 
+          };
+          
+          // Save to cache
+          addressCache.set(address, townResult);
+          return townResult;
         }
       }
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch address data');
     }
     
-    const data = await response.json();
+    // Default to LAGOS if no town found
+    const defaultResult = { town: 'LAGOS', display_name: address };
+    addressCache.set(address, defaultResult);
+    return defaultResult;
     
-    if (data && data.length > 0) {
-      const parts = data[0].display_name.split(', ');
-      
-      return {
-        town: parts.length >= 2 ? parts[1] : (parts.length === 1 ? parts[0] : 'Unknown'),
-        display_name: data[0].display_name,
-        lat: data[0].lat,
-        lon: data[0].lon
-      };
-    }
-    
-    return null;
   } catch (error) {
     console.error('Error parsing address:', error);
-    return null;
+    return { town: 'LAGOS', display_name: address };
   }
 };
-
