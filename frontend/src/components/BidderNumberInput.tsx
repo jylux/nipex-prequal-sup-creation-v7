@@ -32,24 +32,17 @@ export default function BidderNumberInput({
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     // Only allow digits
-    let inputVal = e.target.value.replace(/\D/g, '');
+    const rawValue = e.target.value.replace(/[^0-9]/g, '');
     
-    // Pad with leading zeros if needed
-    if (inputVal.length > 0 && inputVal.length < 10) {
-      inputVal = inputVal.padStart(10, '0');
-    }
+    // Update internal state immediately for a responsive feel
+    setInternalValue(rawValue);
     
-    // Enforce max length of 10
-    if (inputVal.length > 10) {
-      inputVal = inputVal.slice(0, 10);
-    }
-    
-    setInternalValue(inputVal);
-    onChange(inputVal);
+    // Also update parent state
+    onChange(rawValue);
   }
 
-  // Format for display with dashes for readability
-  const formattedValue = internalValue.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+  // Format for display with dashes for readability (optional)
+  const formattedValue = internalValue;
 
   return (
     <Card>
@@ -65,7 +58,7 @@ export default function BidderNumberInput({
             type="text"
             value={formattedValue}
             onChange={handleChange}
-            placeholder="000-000-0000"
+            placeholder="0000000000"
             className="font-mono"
           />
         </div>
