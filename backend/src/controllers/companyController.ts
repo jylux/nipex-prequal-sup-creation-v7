@@ -219,6 +219,11 @@ export const exportText = async (req: Request, res: Response) => {
  * Inserts records into tblsupplier table in nipexjqs database.
  * Checks for duplicates before insertion.
  */
+/**
+ * POST /companies/insert
+ * Inserts records into tblsupplier table in nipexjqs database.
+ * Relies on database constraints to catch duplicate suppuserid values.
+ */
 export const insertCompanies = async (req: Request, res: Response) => {
   const companies = req.body;
 
@@ -236,21 +241,7 @@ export const insertCompanies = async (req: Request, res: Response) => {
 
     for (const company of companies) {
       try {
-        // Check for duplicates by name or email
-        const [existingCompanies] = await jqsPool.query<SupplierRow[]>(
-          'SELECT SUP_ID FROM tblsupplier WHERE SUP_NAME = ? OR SUP_Email = ?',
-          [company.SUP_NAME, company.SUP_Email]
-        );
-        
-        if (existingCompanies.length > 0) {
-          results.duplicates.push({
-            company,
-            message: `Duplicate entry found with ID: ${existingCompanies[0].SUP_ID}`
-          });
-          continue;
-        }
-        
-        // Insert the record
+        // Attempt to insert directly - let the database handle duplicates
         const [insertResult] = await jqsPool.query<ResultSetHeader>(
           `INSERT INTO tblsupplier (
             suppuserid, SUP_NAME, SUP_Address1, SUP_Town, 
@@ -273,19 +264,38 @@ export const insertCompanies = async (req: Request, res: Response) => {
           company,
           insertId: insertResult.insertId
         });
-      } catch (err) {
-        const error = err as Error;
-        results.errors.push({
-          company,
-          error: error.message
-        });
+      } catch (err: any) {
+        // Handle duplicate key errors
+        if (err.code === 'ER_DUP_ENTRY') {
+          // Extract the duplicate value from the error message
+          const duplicateMatch = err.message.match(/Duplicate entry '(.+)' for key/);
+          const duplicateValue = duplicateMatch ? duplicateMatch[1] : company.suppuserid;
+          
+          results.duplicates.push({
+            company,
+            message: `Duplicate supplier ID found: "${duplicateValue}". Please remove this entry.`
+          });
+        } else {
+          // Handle any other database errors
+          results.errors.push({
+            company,
+            error: err.message
+          });
+        }
       }
     }
     
-    return res.json(results);
-  } catch (err) {
-    const error = err as Error;
-    console.error('insertCompanies error:', error);
+    return res.json({
+      success: results.inserted.length > 0,
+      results: {
+        inserted: results.inserted.length,
+        duplicates: results.duplicates.length,
+        errors: results.errors.length
+      },
+      details: results
+    });
+  } catch (err: any) {
+    console.error('insertCompanies error:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };

@@ -206,3 +206,14 @@ export const searchAddress = async (address: string) => {
     return { town: 'LAGOS', display_name: address };
   }
 };
+// In your api.ts file
+
+insertCompanies: async (companies: any[]) => {
+  try {
+    const response = await api.post('/companies/insert', companies);
+    return response.data; // Return the full response with duplicate details
+  } catch (error) {
+    console.error('Error inserting companies:', error);
+    throw error;
+  }
+}

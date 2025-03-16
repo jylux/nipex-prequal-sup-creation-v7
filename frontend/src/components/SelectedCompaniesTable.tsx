@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Download, FileText, Save } from "lucide-react";
+import { Trash2, Download, FileText, Save, AlertCircle } from "lucide-react";
 import { searchAddress } from "@/utils/api";
 import { 
   Tooltip,
@@ -206,9 +206,17 @@ export default function SelectedCompaniesTable({
                 </TableRow>
               ) : (
                 companies.map((company) => (
-                  <TableRow key={company.suppuserid}>
+                  <TableRow key={company.suppuserid}
+                            className={company.isDuplicate ? "bg-red-50 border-red-200" : ""}
+                  >
                     <TableCell className="font-mono text-xs">{company.suppuserid}</TableCell>
-                    <TableCell>{company.SUP_NAME}</TableCell>
+                    <TableCell>{company.isDuplicate && (
+                                  <span className="inline-flex items-center mr-2 text-red-500">
+                                    <AlertCircle className="h-4 w-4 mr-1" />
+                                    Duplicate
+                                  </span>
+                )}
+    {company.SUP_NAME}</TableCell>
                     <TableCell className="max-w-xs truncate" title={company.SUP_Address1}>
                       {company.SUP_Address1}
                     </TableCell>

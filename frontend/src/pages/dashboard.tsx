@@ -33,6 +33,8 @@ import { Company } from '@/types';
 //   [key: string]: any; // For additional fields
 // }
 
+
+
 export default function DashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -329,22 +331,55 @@ export default function DashboardPage() {
         });
       }
       
-      if (result.duplicates && result.duplicates.length > 0) {
+      // if (result.duplicates && result.duplicates.length > 0) {
+      //   toast({
+      //     title: "Duplicates detected",
+      //     description: `${result.duplicates.length} companies were duplicates and not inserted`,
+      //     variant: "warning",
+      //   });
+      // }
+      
+      // if (result.errors && result.errors.length > 0) {
+      //   toast({
+      //     title: "Insert errors",
+      //     description: `${result.errors.length} companies had errors during insertion`,
+      //     variant: "destructive",
+      //   });
+      // }
+      
+      // Handle duplicates with more detailed information
+      // Create an array of duplicate IDs to highlight in the UI
+// const duplicateIds = result.details.duplicates.map((dup: any) => dup.company.suppuserid);
+    if (result.results.duplicates > 0) {
+      // Create an array of duplicate IDs to highlight in the UI
+      const duplicateIds = result.details.duplicates.map((dup: any) => dup.company.suppuserid);
+      
+      // Mark duplicate companies in the UI
+      setSelectedCompanies(prev => 
+        prev.map(company => ({
+          ...company,
+          isDuplicate: duplicateIds.includes(company.suppuserid)
+        }))
+      );
+      
+      // Show a toast with information about duplicates
+      toast({
+        title: "Duplicate supplier IDs detected",
+        description: `${result.results.duplicates} companies have duplicate supplier IDs and were not inserted`,
+        variant: "warning",
+      });
+      
+      // If there are specific duplicate messages, show them in a more detailed way
+      if (result.details.duplicates.length > 0) {
+        // Option 1: Show the first duplicate in a toast
         toast({
-          title: "Duplicates detected",
-          description: `${result.duplicates.length} companies were duplicates and not inserted`,
+          title: "Duplicate details",
+          description: result.details.duplicates[0].message,
           variant: "warning",
         });
+        
       }
-      
-      if (result.errors && result.errors.length > 0) {
-        toast({
-          title: "Insert errors",
-          description: `${result.errors.length} companies had errors during insertion`,
-          variant: "destructive",
-        });
-      }
-      
+    }
       // Clear selected companies if at least one was successfully inserted
       if (result.inserted && result.inserted.length > 0) {
         setSelectedCompanies([]);
