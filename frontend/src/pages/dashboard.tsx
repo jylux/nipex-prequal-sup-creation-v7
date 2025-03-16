@@ -17,20 +17,21 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
+import { Company } from '@/types';
 
 
-interface Company {
-  suppuserid: string | number;
-  SUP_NAME: string;
-  SUP_Address1: string;
-  SUP_Town: string;
-  SUP_Phone: string;
-  SUP_Email: string;
-  SUP_Website: string;
-  date_prequal: string;
-  BIDDER_NUMBER: string;
-  [key: string]: any; // For additional fields
-}
+// interface Company {
+//   suppuserid: string | number;
+//   SUP_NAME: string;
+//   SUP_Address1: string;
+//   SUP_Town: string;
+//   SUP_Phone: string;
+//   SUP_Email: string;
+//   SUP_Website: string;
+//   date_prequal: string;
+//   BIDDER_NUMBER: string;
+//   [key: string]: any; // For additional fields
+// }
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -394,7 +395,21 @@ export default function DashboardPage() {
             {/* Left Column */}
             <div className="md:col-span-4 space-y-6">
               {/* Search Component */}
-              <CompanySearch onSearch={handleSearch} isLoading={isSearching} />
+              {/* <CompanySearch onSearch={handleSearch} isLoading={isSearching} /> */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-medium">Search Companies</CardTitle>
+                  <CardDescription>
+                      Search for companies and click to add them
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <CompanySearch 
+                        onAddCompany={addCompany} 
+                        isProcessing={isProcessing}
+                      />
+                </CardContent>
+              </Card>
               
               {/* Bidder Number Input */}
               <BidderNumberInput 
@@ -402,7 +417,7 @@ export default function DashboardPage() {
                 onChange={setBidderStart} 
               />
               
-              {/* Search Results */}
+              {/* Search Results
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg font-medium">Search Results</CardTitle>
@@ -461,7 +476,7 @@ export default function DashboardPage() {
                     </ScrollArea>
                   )}
                 </CardContent>
-              </Card>
+              </Card> */}
             </div>
             
             {/* Right Column - Selected Companies Table */}
