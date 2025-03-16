@@ -1,36 +1,59 @@
+// backend/src/index.ts
 import express from "express";
-import cookieParser from "cookie-parser";
 import cors from "cors";
+import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+import authRoutes from "./routes/authRoutes";
+import companyRoutes from "./routes/companyRoutes";
 
-import authRoutes from "./routes/authRoutes";  // ✅ Fix import
-import companyRoutes from "./routes/companyRoutes";  // ✅ Fix import
+// Load environment variables from .env file
+dotenv.config();
 
+// Create Express application
 const app = express();
+const PORT = process.env.PORT || 4000;
 
-// ✅ Fix CORS issue by allowing multiple origins
-const allowedOrigins = ["http://localhost:3000", "http://localhost:3003"];
-
+// Configure CORS
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true, // Critical for cookies to work with cross-origin requests
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
 
-app.use(express.json());
-app.use(cookieParser());
+// Middleware
+app.use(express.json()); // Parse JSON request bodies
+app.use(cookieParser()); // Parse cookies
 
-// ✅ Attach routes correctly
+// Simple logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/companies", companyRoutes);
 
-const PORT = process.env.PORT || 4000;
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "healthy", timestamp: new Date().toISOString() });
+});
+
+// Error handling middleware
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({
+    message: "An unexpected error occurred",
+    error: process.env.NODE_ENV === "production" ? null : err.message
+  });
+});
+
+// Start the server
 app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`- Auth API: http://localhost:${PORT}/api/auth`);
+  console.log(`- Companies API: http://localhost:${PORT}/api/companies`);
 });

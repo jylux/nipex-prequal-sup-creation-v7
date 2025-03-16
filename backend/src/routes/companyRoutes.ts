@@ -1,11 +1,23 @@
+// backend/src/routes/companyRoutes.ts
+
 import express from "express";
-import { searchCompanies, insertCompanies } from "../controllers/companyController";
+import { 
+  searchCompanies, 
+  insertCompanies, 
+  exportExcel,
+  exportText
+} from "../controllers/companyController";
 
 const router = express.Router();
 
-// Ensure `searchCompanies` and `insertCompanies` are correctly imported
+// Company search endpoint
 router.get("/search", searchCompanies);
+
+// Export endpoints
+router.post("/export/excel", exportExcel);
+router.post("/export/text", exportText);
+
+// Database insertion endpoint
 router.post("/insert", insertCompanies);
 
 export default router;
-

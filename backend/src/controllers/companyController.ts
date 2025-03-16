@@ -4,6 +4,27 @@ import { Request, Response } from 'express';
 import { jqsPool } from '../config/db';
 import { livePool } from '../config/db';
 import { parseAddress } from '../utils/addressParser';
+import * as XLSX from 'xlsx';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
+
+// Define interfaces for your database rows
+interface CompanyRow extends RowDataPacket {
+  fldi_company_id: number | string;
+  fldv_companyname: string;
+  fldi_vendor_id: string;
+  fldv_address: string;
+  fldv_phonenumber?: string;
+  fldv_email?: string;
+  fldv_website?: string;
+  date_prequal?: string;
+}
+
+interface SupplierRow extends RowDataPacket {
+  SUP_ID: number;
+  SUP_NAME: string;
+  SUP_Email: string;
+  // Add other fields as needed
+}
 
 /**
  * GET /companies/search?query=...
@@ -20,21 +41,33 @@ export const searchCompanies = async (req: Request, res: Response) => {
   }
 
   try {
-    // Example: MySQL syntax. Adjust for your DB engine if needed.
+    // Modified SQL to exclude numeric vendor IDs directly in the query
     const sql = `
-      SELECT fldi_company_id, fldv_companyname, fldi_vendor_id, fldv_address
+      SELECT fldi_company_id, fldv_companyname, fldi_vendor_id, fldv_address, 
+             fldv_phone, fldv_email_id, fldv_website
       FROM tbl_company_mst
       WHERE fldv_companyname LIKE ?
+      AND fldi_vendor_id NOT REGEXP '[^0-9]'
       LIMIT 20
     `;
-    const [rows] = await livePool.query(sql, [`%${query}%`]);
+    
+    const [rows] = await livePool.query<CompanyRow[]>(sql, [`%${query}%`]);
 
-    // Exclude purely numeric vendor IDs (e.g., '12345')
-    const filtered = Array.isArray(rows)
-      ? (rows as any[]).filter((row) => !/^\d+$/.test(row.fldi_vendor_id))
-      : [];
+    // Map DB columns to frontend expected format
+    const companies = rows.map(row => ({
+      suppuserid: row.fldi_company_id,
+      SUP_NAME: row.fldv_companyname,
+      SUP_Address1: row.fldv_address || '',
+      SUP_Phone: row.fldv_phonen || '',
+      SUP_Email: row.fldv_email || '',
+      SUP_Website: row.fldv_website || '',
+      SUP_Town: '', // Will be populated by frontend with OpenStreetMap API
+      date_prequal: new Date,
+      BIDDER_NUMBER: '', // Will be populated by frontend
+      fldi_vendor_id: row.fldi_vendor_id, // Keeping original ID for reference
+    }));
 
-    return res.json(filtered);
+    return res.json(companies);
   } catch (error) {
     console.error('searchCompanies error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -42,62 +75,150 @@ export const searchCompanies = async (req: Request, res: Response) => {
 };
 
 /**
+ * POST /companies/export/excel
+ * Exports selected companies to Excel format
+ */
+export const exportExcel = async (req: Request, res: Response) => {
+  try {
+    const companies = req.body;
+    
+    if (!Array.isArray(companies)) {
+      return res.status(400).json({ message: 'Companies must be an array' });
+    }
+    
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(companies);
+    
+    // Apply formatting (headers bold)
+    const range = XLSX.utils.decode_range(ws['!ref'] || '');
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cell = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (!ws[cell]) continue;
+      ws[cell].s = { font: { bold: true } };
+    }
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Suppliers');
+    
+    // Write to buffer
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set headers for file download
+    res.setHeader('Content-Disposition', 'attachment; filename="suppliers.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    
+    // Send the file
+    return res.send(buf);
+  } catch (error) {
+    console.error('exportExcel error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * POST /companies/export/text
+ * Exports selected companies to tab-delimited text format
+ */
+export const exportText = async (req: Request, res: Response) => {
+  try {
+    const companies = req.body;
+    
+    if (!Array.isArray(companies)) {
+      return res.status(400).json({ message: 'Companies must be an array' });
+    }
+    
+    // Format each company according to the specified format
+    const lines = companies.map(company => {
+      return `bbp001 ${company.SUP_NAME} ${company.SUP_NAME} EN NG ${company.SUP_Phone} NG ${company.SUP_Email} ${company.SUP_Town} 0002 ${company.SUP_NAME} ${company.SUP_NAME} EN X ${company.suppuserid} 50004066`;
+    });
+    
+    // Join lines with newlines
+    const content = lines.join('\n');
+    
+    // Set headers for file download
+    res.setHeader('Content-Disposition', 'attachment; filename="suppliers.txt"');
+    res.setHeader('Content-Type', 'text/plain');
+    
+    // Send the file
+    return res.send(content);
+  } catch (error) {
+    console.error('exportText error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
  * POST /companies/insert
- * Expects JSON with:
- *  {
- *    "companies": [ { id, fldcompany_name, fldi_vendor_id, fldaddress, ... }, ... ],
- *    "startBidderNumber": "0000000000"
- *  }
- * Inserts records into tblsupplier, incrementing bidder number by 2 each time.
- * Also calls parseAddress to get a city/town from the address.
+ * Inserts records into tblsupplier table in nipexjqs database.
+ * Checks for duplicates before insertion.
  */
 export const insertCompanies = async (req: Request, res: Response) => {
-  const { companies, startBidderNumber } = req.body;
+  const companies = req.body;
 
   // Validate input
   if (!Array.isArray(companies)) {
     return res.status(400).json({ message: 'Companies must be an array' });
   }
-  if (typeof startBidderNumber !== 'string' || startBidderNumber.length !== 10) {
-    return res.status(400).json({ message: 'startBidderNumber must be a 10-digit string' });
-  }
 
   try {
-    let currentBidder = parseInt(startBidderNumber, 10);
-    if (isNaN(currentBidder)) {
-      return res.status(400).json({ message: 'startBidderNumber is not a valid number' });
+    const results = {
+      inserted: [] as Array<{ company: any; insertId: number | string }>,
+      duplicates: [] as Array<{ company: any; message: string }>,
+      errors: [] as Array<{ company: any; error: string }>
+    };
+
+    for (const company of companies) {
+      try {
+        // Check for duplicates by name or email
+        const [existingCompanies] = await jqsPool.query<SupplierRow[]>(
+          'SELECT SUP_ID FROM tblsupplier WHERE SUP_NAME = ? OR SUP_Email = ?',
+          [company.SUP_NAME, company.SUP_Email]
+        );
+        
+        if (existingCompanies.length > 0) {
+          results.duplicates.push({
+            company,
+            message: `Duplicate entry found with ID: ${existingCompanies[0].SUP_ID}`
+          });
+          continue;
+        }
+        
+        // Insert the record
+        const [insertResult] = await jqsPool.query<ResultSetHeader>(
+          `INSERT INTO tblsupplier (
+            suppuserid, SUP_NAME, SUP_Address1, SUP_Town, 
+            SUP_Phone, SUP_Email, SUP_Website, date_prequal, BIDDER_NUMBER
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            company.suppuserid,
+            company.SUP_NAME,
+            company.SUP_Address1,
+            company.SUP_Town,
+            company.SUP_Phone,
+            company.SUP_Email,
+            company.SUP_Website,
+            company.date_prequal,
+            company.BIDDER_NUMBER
+          ]
+        );
+        
+        results.inserted.push({
+          company,
+          insertId: insertResult.insertId
+        });
+      } catch (err) {
+        const error = err as Error;
+        results.errors.push({
+          company,
+          error: error.message
+        });
+      }
     }
-
-    for (const comp of companies) {
-      // 1) Parse address to get a city/town
-      const city = await parseAddress(comp.fldaddress);
-
-      // 2) Construct the next bidder number (zero-padded to 10 digits)
-      const bidderStr = currentBidder.toString().padStart(10, '0');
-
-      // 3) Insert record into tblsupplier
-      // Adjust the fields below to match your actual table schema
-      await jqsPool.query(
-        `INSERT INTO tblsupplier (
-           suppuserid,
-           SUP_NAME,
-           BIDDER_NUMBER,
-           SUP_Town
-         ) VALUES (?, ?, ?, ?)`,
-        [
-          comp.fldi_company_id,
-          comp.fldvcompanyname,
-          bidderStr,
-          city
-        ]
-      );
-
-      // Increment by 2 for the next company
-      currentBidder += 2;
-    }
-
-    return res.json({ message: 'Companies inserted successfully' });
-  } catch (error) {
+    
+    return res.json(results);
+  } catch (err) {
+    const error = err as Error;
     console.error('insertCompanies error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
