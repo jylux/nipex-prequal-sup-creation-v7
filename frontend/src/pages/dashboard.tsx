@@ -16,24 +16,11 @@ import {
 } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, PlusCircle, CheckCircle } from 'lucide-react';
+import { Loader2, PlusCircle, CheckCircle, LogOut } from 'lucide-react';
 import { Company } from '@/types';
 import DuplicateAlert from '@/components/DuplicateAlert';
 import { DuplicateEntry } from '@/types';
 
-
-// interface Company {
-//   suppuserid: string | number;
-//   SUP_NAME: string;
-//   SUP_Address1: string;
-//   SUP_Town: string;
-//   SUP_Phone: string;
-//   SUP_Email: string;
-//   SUP_Website: string;
-//   date_prequal: string;
-//   BIDDER_NUMBER: string;
-//   [key: string]: any; // For additional fields
-// }
 
 
 
@@ -393,79 +380,68 @@ const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
         <header className="bg-white shadow-sm border-b">
           <div className="container mx-auto py-4 px-4">
             <h1 className="text-2xl font-bold text-gray-900">NIPEX JQS Dashboard</h1>
+            <Button 
+      variant="outline" 
+      onClick={() => {
+        // Clear token from localStorage
+        localStorage.removeItem('token');
+        // Redirect to login page
+        router.push('/');
+      }}
+      className="flex items-center gap-2"
+    >
+      <LogOut className="h-4 w-4" />
+      Logout
+    </Button>
           </div>
         </header>
         
         <main className="container mx-auto px-4 py-6">
-        {showSuccess && (
+  {showSuccess && (
     <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded flex items-center">
       <CheckCircle className="h-5 w-5 mr-2" />
       Companies inserted successfully!
     </div>
-    
   )}
-  {/* Add this to your JSX, right after your showSuccess alert */}
-
-  {showDuplicateAlert && duplicateEntries.length > 0 && (
-  <DuplicateAlert
-    duplicates={duplicateEntries}
-    onClose={() => setShowDuplicateAlert(false)}
-    onRemove={(id) => {
-      removeCompany(id);
-      // If we've removed all duplicates, hide the alert
-      const remainingDuplicates = duplicateEntries.filter(
-        dup => dup.company.suppuserid !== id
-      );
-      setDuplicateEntries(remainingDuplicates);
-      if (remainingDuplicates.length === 0) {
-        setShowDuplicateAlert(false);
-      }
-    }}
-  />
-)}
   
+  {/* Top section: Search Companies and Bidder Number side by side */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    {/* Search Component */}
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-medium">Search Companies</CardTitle>
+        <CardDescription>
+          Search for companies and click to add them
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <CompanySearch 
+          onAddCompany={addCompany} 
+          isProcessing={isProcessing}
+        />
+      </CardContent>
+    </Card>
+    
+    {/* Bidder Number Input */}
+    <BidderNumberInput 
+      value={bidderStart} 
+      onChange={setBidderStart} 
+    />
+  </div>
   
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Left Column */}
-            <div className="md:col-span-4 space-y-6">
-              {/* Search Component */}
-              {/* <CompanySearch onSearch={handleSearch} isLoading={isSearching} /> */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-medium">Search Companies</CardTitle>
-                  <CardDescription>
-                      Search for companies and click to add them
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <CompanySearch 
-                        onAddCompany={addCompany} 
-                        isProcessing={isProcessing}
-                      />
-                </CardContent>
-              </Card>
-              
-              {/* Bidder Number Input */}
-              <BidderNumberInput 
-                value={bidderStart} 
-                onChange={setBidderStart} 
-              />
-            </div>
-            
-            {/* Right Column - Selected Companies Table */}
-            <div className="md:col-span-8">
-              <SelectedCompaniesTable 
-                companies={selectedCompanies}
-                onRemove={removeCompany}
-                onUpdate={updateCompany}
-                onExportExcel={handleExportExcel}
-                onExportText={handleExportText}
-                onInsert={handleInsertCompanies}
-                loading={isProcessing}
-              />
-            </div>
-          </div>
-        </main>
+  {/* Bottom section: Selected Companies Table full width */}
+  <div className="w-full">
+    <SelectedCompaniesTable 
+      companies={selectedCompanies}
+      onRemove={removeCompany}
+      onUpdate={updateCompany}
+      onExportExcel={handleExportExcel}
+      onExportText={handleExportText}
+      onInsert={handleInsertCompanies}
+      loading={isProcessing}
+    />
+  </div>
+</main>
       </div>
     </>
   );
