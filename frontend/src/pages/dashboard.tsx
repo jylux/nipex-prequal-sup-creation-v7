@@ -388,7 +388,7 @@ const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
         // Redirect to login page
         router.push('/');
       }}
-      className="flex items-center gap-2"
+      className="ml-auto flex items-center gap-2"
     >
       <LogOut className="h-4 w-4" />
       Logout

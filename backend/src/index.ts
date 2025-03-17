@@ -11,14 +11,14 @@ dotenv.config();
 
 // Create Express application
 const app = express();
-// const PORT = process.env.PORT || 4000;
-const PORT = process.env.PORT || 10000;
+// const PORT = process.env.PORT || 4000; // Development
+const PORT = process.env.PORT || 10000; //Production
 
 // Configure CORS
 app.use(
   cors({
     // origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    origin: process.env.FRONTEND_URL || "https://nipex-prequal-sup-creation-v7.onrender.com",
+    origin: process.env.FRONTEND_URL || "https://nipex-prequal-sup-creation-v7-1.onrender.com",
     credentials: true, // Critical for cookies to work with cross-origin requests
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"]
