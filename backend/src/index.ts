@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 4000;
 // Configure CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: process.env.FRONTEND_URL || "https://nipex-prequal-sup-creation-v7.onrender.com",
     credentials: true, // Critical for cookies to work with cross-origin requests
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"]
