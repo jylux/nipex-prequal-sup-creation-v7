@@ -54,6 +54,7 @@ export const searchCompanies = async (req: Request, res: Response) => {
     const [rows] = await livePool.query<CompanyRow[]>(sql, [`%${query}%`]);
 
     // Map DB columns to frontend expected format
+    const date_prequal = new Date().toLocaleDateString('en-CA');
     const companies = rows.map(row => ({
       suppuserid: row.fldi_vendor_id,
       SUP_NAME: row.fldv_companyname,
@@ -62,7 +63,7 @@ export const searchCompanies = async (req: Request, res: Response) => {
       SUP_Email: row.fldv_email_id,
       SUP_Website: row.fldv_website,
       SUP_Town: '', // Will be populated by frontend with OpenStreetMap API
-      date_prequal: new Date,
+      date_prequal,
       BIDDER_NUMBER: '', // Will be populated by frontend
       fldi_vendor_id: row.fldi_vendor_id, // Keeping original ID for reference
     }));
@@ -224,6 +225,10 @@ export const exportText = async (req: Request, res: Response) => {
  * Inserts records into tblsupplier table in nipexjqs database.
  * Relies on database constraints to catch duplicate suppuserid values.
  */
+/**
+ * POST /companies/insert
+ * Inserts records into tblsupplier table in nipexjqs database.
+ */
 export const insertCompanies = async (req: Request, res: Response) => {
   const companies = req.body;
 
@@ -233,16 +238,10 @@ export const insertCompanies = async (req: Request, res: Response) => {
   }
 
   try {
-    const results = {
-      inserted: [] as Array<{ company: any; insertId: number | string }>,
-      duplicates: [] as Array<{ company: any; message: string }>,
-      errors: [] as Array<{ company: any; error: string }>
-    };
-
+    // Insert companies one by one to catch duplicates
     for (const company of companies) {
       try {
-        // Attempt to insert directly - let the database handle duplicates
-        const [insertResult] = await jqsPool.query<ResultSetHeader>(
+        await jqsPool.query(
           `INSERT INTO tblsupplier (
             suppuserid, SUP_NAME, SUP_Address1, SUP_Town, 
             SUP_Phone, SUP_Email, SUP_Website, date_prequal, BIDDER_NUMBER
@@ -259,43 +258,41 @@ export const insertCompanies = async (req: Request, res: Response) => {
             company.BIDDER_NUMBER
           ]
         );
-        
-        results.inserted.push({
-          company,
-          insertId: insertResult.insertId
-        });
       } catch (err: any) {
-        // Handle duplicate key errors
-        if (err.code === 'ER_DUP_ENTRY') {
-          // Extract the duplicate value from the error message
-          const duplicateMatch = err.message.match(/Duplicate entry '(.+)' for key/);
-          const duplicateValue = duplicateMatch ? duplicateMatch[1] : company.suppuserid;
-          
-          results.duplicates.push({
-            company,
-            message: `Duplicate supplier ID found: "${duplicateValue}". Please remove this entry.`
-          });
-        } else {
-          // Handle any other database errors
-          results.errors.push({
-            company,
-            error: err.message
-          });
-        }
+        // If duplicate entry is found, return a specific error
+        // If duplicate entry is found, return a specific error
+if (err.code === 'ER_DUP_ENTRY') {
+  const duplicateIdMatch = err.message.match(/Duplicate entry '(.+)' for key/);
+  const duplicateId = duplicateIdMatch ? duplicateIdMatch[1] : null;
+  
+  if (duplicateId) {
+    // Find the company name to include in the error
+    const companyName = company.SUP_NAME || 'Unknown company';
+    
+    return res.status(409).json({
+      error: 'DUPLICATE_ENTRY',
+      duplicateId,
+      companyName, // Include the company name
+      message: `Duplicate entry found: "${companyName}" (ID: ${duplicateId}). Please remove this entry and try again.`
+    });
+  } else {
+    return res.status(409).json({
+      error: 'DUPLICATE_ENTRY',
+      message: 'A duplicate entry was found, but the specific ID could not be determined.'
+    });
+  }
+}
+        
+        // For any other error, throw it to be caught by the outer catch
+        throw err;
       }
     }
     
-    return res.json({
-      success: results.inserted.length > 0,
-      results: {
-        inserted: results.inserted.length,
-        duplicates: results.duplicates.length,
-        errors: results.errors.length
-      },
-      details: results
-    });
-  } catch (err: any) {
-    console.error('insertCompanies error:', err);
-    return res.status(500).json({ message: 'Internal server error' });
+    // If all inserts succeeded
+    return res.json({ success: true });
+    
+  } catch (error: any) {
+    console.error('insertCompanies error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };

@@ -16,8 +16,10 @@ import {
 } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, PlusCircle } from 'lucide-react';
+import { Loader2, PlusCircle, CheckCircle } from 'lucide-react';
 import { Company } from '@/types';
+import DuplicateAlert from '@/components/DuplicateAlert';
+import { DuplicateEntry } from '@/types';
 
 
 // interface Company {
@@ -43,6 +45,9 @@ export default function DashboardPage() {
   const [bidderStart, setBidderStart] = useState('0000000000');
   const [isSearching, setIsSearching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [duplicateEntries, setDuplicateEntries] = useState<DuplicateEntry[]>([]);
+const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
 
   // (Optional) Check if user is logged in on mount
   useEffect(() => {
@@ -288,6 +293,8 @@ export default function DashboardPage() {
 
   // Insert selected companies into the database
   async function handleInsertCompanies() {
+    console.log("handleInsertCompanies started");
+    
     if (selectedCompanies.length === 0) {
       toast({
         title: "No companies selected",
@@ -297,105 +304,69 @@ export default function DashboardPage() {
       return;
     }
     
-    // Make sure all companies have required fields
-    const invalidCompanies = selectedCompanies.filter(
-      comp => !comp.SUP_NAME || !comp.BIDDER_NUMBER
-    );
-    
-    if (invalidCompanies.length > 0) {
-      toast({
-        title: "Invalid companies",
-        description: `${invalidCompanies.length} companies are missing required fields`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Check if any town fields are empty and show a warning
-    const companiesWithoutTown = selectedCompanies.filter(comp => !comp.SUP_Town);
-    if (companiesWithoutTown.length > 0) {
-      if (!window.confirm(`${companiesWithoutTown.length} companies do not have town information. Do you want to continue?`)) {
-        return;
-      }
-    }
-    
     setIsProcessing(true);
+    
     try {
-      const result = await companyApi.insertCompanies(selectedCompanies);
+      // Make API call
+      await companyApi.insertCompanies(selectedCompanies);
       
-      // Handle results
-      if (result.inserted && result.inserted.length > 0) {
-        toast({
-          title: "Insert successful",
-          description: `Successfully inserted ${result.inserted.length} companies`,
-        });
-      }
+      // If we get here, the insert was successful
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
       
-      // if (result.duplicates && result.duplicates.length > 0) {
-      //   toast({
-      //     title: "Duplicates detected",
-      //     description: `${result.duplicates.length} companies were duplicates and not inserted`,
-      //     variant: "warning",
-      //   });
-      // }
-      
-      // if (result.errors && result.errors.length > 0) {
-      //   toast({
-      //     title: "Insert errors",
-      //     description: `${result.errors.length} companies had errors during insertion`,
-      //     variant: "destructive",
-      //   });
-      // }
-      
-      // Handle duplicates with more detailed information
-      // Create an array of duplicate IDs to highlight in the UI
-// const duplicateIds = result.details.duplicates.map((dup: any) => dup.company.suppuserid);
-    if (result.results.duplicates > 0) {
-      // Create an array of duplicate IDs to highlight in the UI
-      const duplicateIds = result.details.duplicates.map((dup: any) => dup.company.suppuserid);
-      
-      // Mark duplicate companies in the UI
-      setSelectedCompanies(prev => 
-        prev.map(company => ({
-          ...company,
-          isDuplicate: duplicateIds.includes(company.suppuserid)
-        }))
-      );
-      
-      // Show a toast with information about duplicates
       toast({
-        title: "Duplicate supplier IDs detected",
-        description: `${result.results.duplicates} companies have duplicate supplier IDs and were not inserted`,
-        variant: "warning",
+        title: "Success!",
+        description: "Companies inserted successfully",
+        variant: "default",
       });
       
-      // If there are specific duplicate messages, show them in a more detailed way
-      if (result.details.duplicates.length > 0) {
-        // Option 1: Show the first duplicate in a toast
+    } catch (error: any) {
+      console.error('Insert error:', error);
+      
+      // Check if it's a duplicate entry error
+      const axiosError = error as {
+        response?: {
+          status?: number;
+          data?: { error?: string; duplicateId?: string; message?: string; companyName?: string };
+        };
+      };
+      
+      if (
+        axiosError.response?.status === 409 &&
+        axiosError.response.data?.error === 'DUPLICATE_ENTRY'
+      ) {
+        const duplicateId = axiosError.response.data.duplicateId;
+        const companyName = axiosError.response.data.companyName || 'Unknown company';
+        const errorMessage = axiosError.response.data.message || 
+                            `Duplicate entry found: "${companyName}" (ID: ${duplicateId}). Please remove this row and try again.`;
+        
+        // Mark the duplicate entry in the table
+        setSelectedCompanies(prev => 
+          prev.map(company => ({
+            ...company,
+            isDuplicate: company.suppuserid === duplicateId
+          }))
+        );
+        
+        // Show more informative error toast
         toast({
-          title: "Duplicate details",
-          description: result.details.duplicates[0].message,
-          variant: "warning",
+          title: "Duplicate Entry Detected",
+          description: errorMessage,
+          variant: "destructive",
         });
         
+        // Optional: Scroll to the duplicate entry
+        setTimeout(() => {
+          const duplicateRow = document.querySelector(`.isDuplicate-${duplicateId}`);
+          if (duplicateRow) {
+            duplicateRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
       }
-    }
-      // Clear selected companies if at least one was successfully inserted
-      if (result.inserted && result.inserted.length > 0) {
-        setSelectedCompanies([]);
-      }
-    } catch (error) {
-      console.error('Insert error:', error);
-      toast({
-        title: "Insert failed",
-        description: "An error occurred while inserting companies",
-        variant: "destructive",
-      });
     } finally {
       setIsProcessing(false);
     }
   }
-
   // Update bidder numbers when starting number changes
   useEffect(() => {
     if (selectedCompanies.length === 0 || !bidderStart) return;
@@ -426,6 +397,34 @@ export default function DashboardPage() {
         </header>
         
         <main className="container mx-auto px-4 py-6">
+        {showSuccess && (
+    <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded flex items-center">
+      <CheckCircle className="h-5 w-5 mr-2" />
+      Companies inserted successfully!
+    </div>
+    
+  )}
+  {/* Add this to your JSX, right after your showSuccess alert */}
+
+  {showDuplicateAlert && duplicateEntries.length > 0 && (
+  <DuplicateAlert
+    duplicates={duplicateEntries}
+    onClose={() => setShowDuplicateAlert(false)}
+    onRemove={(id) => {
+      removeCompany(id);
+      // If we've removed all duplicates, hide the alert
+      const remainingDuplicates = duplicateEntries.filter(
+        dup => dup.company.suppuserid !== id
+      );
+      setDuplicateEntries(remainingDuplicates);
+      if (remainingDuplicates.length === 0) {
+        setShowDuplicateAlert(false);
+      }
+    }}
+  />
+)}
+  
+  
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             {/* Left Column */}
             <div className="md:col-span-4 space-y-6">
@@ -451,67 +450,6 @@ export default function DashboardPage() {
                 value={bidderStart} 
                 onChange={setBidderStart} 
               />
-              
-              {/* Search Results
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-medium">Search Results</CardTitle>
-                  <CardDescription>
-                    {isSearching 
-                      ? 'Searching...' 
-                      : searchResults.length > 0 
-                        ? `Found ${searchResults.length} companies` 
-                        : 'Enter a company name to search'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isSearching ? (
-                    <div className="flex items-center justify-center py-6">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-96">
-                      <div className="space-y-2">
-                        {searchResults.length === 0 ? (
-                          <p className="text-center text-muted-foreground py-6">
-                            No results to display
-                          </p>
-                        ) : (
-                          searchResults.map((company) => (
-                            <Card key={company.suppuserid} className="overflow-hidden">
-                              <CardContent className="p-3">
-                                <div className="flex justify-between items-start gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <h3 className="font-medium truncate" title={company.SUP_NAME}>
-                                      {company.SUP_NAME}
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground truncate" title={company.SUP_Address1}>
-                                      {company.SUP_Address1}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      ID: {company.suppuserid}
-                                    </p>
-                                  </div>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => addCompany(company)}
-                                    className="shrink-0"
-                                    disabled={isProcessing}
-                                  >
-                                    <PlusCircle className="h-4 w-4 mr-1" />
-                                    Add
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card> */}
             </div>
             
             {/* Right Column - Selected Companies Table */}

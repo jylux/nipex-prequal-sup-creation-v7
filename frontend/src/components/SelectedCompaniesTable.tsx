@@ -51,7 +51,7 @@ interface SelectedCompaniesTableProps {
   onUpdate?: (updatedCompany: Company) => void;
   onExportExcel?: () => Promise<void>;
   onExportText?: () => Promise<void>;
-  onInsert?: () => Promise<void>;
+  onInsert: () => Promise<void>;
   loading?: boolean;
 }
 
@@ -172,7 +172,24 @@ export default function SelectedCompaniesTable({
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={onInsert}>
+                <AlertDialogAction 
+  onClick={(e) => {
+    // Prevent default to ensure we handle this ourselves
+    e.preventDefault();
+    
+    // Check if onInsert exists before calling it
+    if (onInsert) {
+      console.log("Calling onInsert function");
+      onInsert();
+      console.log("Calling onInsert function");
+    }
+    else{
+      console.log("onInsert function is undefined");
+    }
+    // Close the dialog
+    document.querySelector('[data-state="open"]')?.setAttribute('data-state', 'closed');
+  }}
+      >
                   Insert Companies
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -206,17 +223,20 @@ export default function SelectedCompaniesTable({
                 </TableRow>
               ) : (
                 companies.map((company) => (
-                  <TableRow key={company.suppuserid}
-                            className={company.isDuplicate ? "bg-red-50 border-red-200" : ""}
-                  >
-                    <TableCell className="font-mono text-xs">{company.suppuserid}</TableCell>
-                    <TableCell>{company.isDuplicate && (
-                                  <span className="inline-flex items-center mr-2 text-red-500">
-                                    <AlertCircle className="h-4 w-4 mr-1" />
-                                    Duplicate
-                                  </span>
-                )}
-    {company.SUP_NAME}</TableCell>
+                  <TableRow 
+  key={company.suppuserid}
+  className={company.isDuplicate ? `bg-red-100 border-red-300 isDuplicate-${company.suppuserid}` : ""}
+>
+  <TableCell className="font-mono text-xs">{company.suppuserid}</TableCell>
+  <TableCell>
+    {company.isDuplicate && (
+      <div className="flex items-center space-x-2 mb-1 p-1 bg-red-50 rounded border border-red-200 text-red-700">
+        <AlertCircle className="h-4 w-4 text-red-500" />
+        <span className="text-sm font-medium">Duplicate entry - already exists in database</span>
+      </div>
+    )}
+    {company.SUP_NAME}
+    </TableCell>
                     <TableCell className="max-w-xs truncate" title={company.SUP_Address1}>
                       {company.SUP_Address1}
                     </TableCell>

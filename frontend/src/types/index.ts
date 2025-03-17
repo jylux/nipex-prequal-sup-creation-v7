@@ -11,3 +11,22 @@ export interface Company {
     BIDDER_NUMBER: string;
     [key: string]: any; // For additional fields
   }
+
+  export interface DuplicateEntry {
+    company: Company;
+    message: string;
+  }
+  
+  export interface InsertResult {
+    success: boolean;
+    results: {
+      inserted: number;
+      duplicates: number;
+      errors: number;
+    };
+    details: {
+      inserted: Array<{ company: Company; insertId: number | string }>;
+      duplicates: Array<DuplicateEntry>;
+      errors: Array<{ company: Company; error: string }>;
+    };
+  }

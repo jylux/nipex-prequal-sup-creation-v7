@@ -123,11 +123,57 @@ exportToText: async (companies: any[], bidderStartNumber?: string) => {
     return true;
   },
   
-  insertCompanies: async (companies: any[]) => {
+//   insertCompanies: async (companies: any[]) => {
+//     console.log("API insertCompanies called with:", companies);
+//     try {
+//       // Add a unique timestamp to help track this specific request in logs
+//       const requestId = Date.now();
+//       console.log(`Request ${requestId}: Starting insert request with ${companies.length} companies`);
+      
+//       const response = await api.post('/companies/insert', companies);
+      
+//       console.log(`Request ${requestId}: Response received:`, response.data);
+      
+//       // Validate that the response has the expected structure
+//       if (!response.data || typeof response.data !== 'object') {
+//         console.error(`Request ${requestId}: Invalid response format:`, response.data);
+//         throw new Error('Invalid response format from server');
+//       }
+      
+//       // Make sure we have the details property for duplicate handling
+//       if (!response.data.details) {
+//         console.warn(`Request ${requestId}: Response missing details property`);
+//         // Add a fallback details object if it's missing
+//         response.data.details = {
+//           duplicates: [],
+//           inserted: [],
+//           errors: []
+//         };
+//       }
+      
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error inserting companies:', error);
+//       throw error;
+//     }
+//   }
+// };
+
+insertCompanies: async (companies: any[]) => {
+  console.log("API insertCompanies called with:", companies);
+  try {
     const response = await api.post('/companies/insert', companies);
+    console.log("API insertCompanies success response:", response.data);
     return response.data;
+  } catch (error) {
+    console.error('Error inserting companies:', error);
+    // Important: Don't handle the error here, let it propagate to the component
+    throw error;
   }
+}
 };
+
+
 
 // OpenStreetMap address parsing
 // Cache to avoid repeated calls for the same address
@@ -208,12 +254,3 @@ export const searchAddress = async (address: string) => {
 };
 // In your api.ts file
 
-insertCompanies: async (companies: any[]) => {
-  try {
-    const response = await api.post('/companies/insert', companies);
-    return response.data; // Return the full response with duplicate details
-  } catch (error) {
-    console.error('Error inserting companies:', error);
-    throw error;
-  }
-}
