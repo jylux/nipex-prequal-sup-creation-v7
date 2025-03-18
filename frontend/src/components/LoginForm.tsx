@@ -25,7 +25,8 @@ export default function LoginForm({ redirectTo = '/dashboard' }: LoginFormProps)
     try {
       // Use axios with withCredentials to handle cookies
       const response = await axios.post(
-        'http://localhost:4000/api/auth/login',
+        // 'http://localhost:4000/api/auth/login',
+        'https://nipex-prequal-sup-creation-v7.onrender.com/api/auth/login',
         { email, password },
         { withCredentials: true } // Important for cookie-based auth
       );
