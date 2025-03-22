@@ -128,12 +128,13 @@ const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
       }
     }
     
-    // Auto-generate bidder number for the new company
-    const nextBidderNumber = (selectedCompanies.length > 0)
-      ? (parseInt(selectedCompanies[selectedCompanies.length - 1].BIDDER_NUMBER || bidderStart) + 2).toString().padStart(10, '0')
-      : bidderStart;
     
+const nextBidderNumber = (selectedCompanies.length > 0)
+? (parseInt(selectedCompanies[selectedCompanies.length - 1].BIDDER_NUMBER || bidderStart) + 2).toString().padStart(10, '0')
+: (parseInt(bidderStart) + 2).toString().padStart(10, '0');
+
     companyToAdd.BIDDER_NUMBER = nextBidderNumber;
+    
     
     setSelectedCompanies([...selectedCompanies, companyToAdd]);
     
@@ -362,10 +363,11 @@ const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
     let currentBidder = parseInt(bidderStart);
     if (isNaN(currentBidder)) return;
     
-    const updatedCompanies = selectedCompanies.map((company, index) => {
-      const bidderNumber = (currentBidder + (index * 2)).toString().padStart(10, '0');
-      return { ...company, BIDDER_NUMBER: bidderNumber };
-    });
+   
+const updatedCompanies = selectedCompanies.map((company, index) => {
+  const bidderNumber = (currentBidder + 2 + (index * 2)).toString().padStart(10, '0');
+  return { ...company, BIDDER_NUMBER: bidderNumber };
+});
     
     setSelectedCompanies(updatedCompanies);
   }, [bidderStart]);

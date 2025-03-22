@@ -82,25 +82,14 @@ export const searchCompanies = async (req: Request, res: Response) => {
  */
 export const exportExcel = async (req: Request, res: Response) => {
   try {
-    const { companies, bidderStartNumber } = req.body;
-    const numericStart = parseInt(bidderStartNumber, 10) || 0;
-    const BID_LEN = 10;
+    const { companies } = req.body;
     
     if (!Array.isArray(companies)) {
       return res.status(400).json({ message: 'Companies must be an array' });
     }
     
     // Process data into the specific format required
-    const processedData = companies.map((company, index) => {
-      let finalBidNum = company.BIDDER_NUMBER;
-      if (!finalBidNum) {
-        finalBidNum = (numericStart + index * 2)
-          .toString()
-          .padStart(BID_LEN, '0');
-      } else {
-        finalBidNum = finalBidNum.padStart(BID_LEN, '0').slice(0, BID_LEN);
-      }
-      
+    const processedData = companies.map((company) => {
       return [
         'bbp001',
         company.SUP_NAME,
@@ -120,8 +109,6 @@ export const exportExcel = async (req: Request, res: Response) => {
         '50004066',
       ];
     });
-    
-  
     
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
@@ -159,25 +146,14 @@ export const exportExcel = async (req: Request, res: Response) => {
  */
 export const exportText = async (req: Request, res: Response) => {
   try {
-    const { companies, bidderStartNumber } = req.body;
-    const numericStart = parseInt(bidderStartNumber, 10) || 0;
-    const BID_LEN = 10;
+    const { companies } = req.body;
     
     if (!Array.isArray(companies)) {
       return res.status(400).json({ message: 'Companies must be an array' });
     }
     
     // Process data into the specific format required and create tab-delimited lines
-    const lines = companies.map((company, index) => {
-      let finalBidNum = company.BIDDER_NUMBER;
-      if (!finalBidNum) {
-        finalBidNum = (numericStart + index * 2)
-          .toString()
-          .padStart(BID_LEN, '0');
-      } else {
-        finalBidNum = finalBidNum.padStart(BID_LEN, '0').slice(0, BID_LEN);
-      }
-      
+    const lines = companies.map((company) => {
       const fields = [
         'bbp001',
         company.SUP_NAME,
@@ -199,7 +175,6 @@ export const exportText = async (req: Request, res: Response) => {
       
       return fields.join('\t');
     });
-    
     
     const content = [...lines].join('\n');
     
